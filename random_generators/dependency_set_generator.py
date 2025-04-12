@@ -1,6 +1,7 @@
 import random
 
-class DependencySetGenerator():
+
+class DependencySetGenerator:
     def __init__(self):
         pass
 
@@ -8,11 +9,11 @@ class DependencySetGenerator():
         dependencies = []
         seen = set()
 
-        while (len(dependencies) < num_dependencies):
+        while len(dependencies) < num_dependencies:
             source_index = random.randint(0, len(task_set) - 1)
             dest_index = source_index
 
-            while (source_index == dest_index):
+            while source_index == dest_index:
                 dest_index = random.randint(0, len(task_set) - 1)
 
             key = (source_index, dest_index)
@@ -22,18 +23,12 @@ class DependencySetGenerator():
 
                 dependency = self.format_dependency(source_index, dest_index, task_set)
                 dependencies.append(dependency)
-            
+
         return dependencies
 
     def format_dependency(self, source_index, dest_index, task_set):
         return {
-            'name': f't{source_index + 1}-t{dest_index + 1}',
-            'source': {
-                'port': 'out1',
-                'task': task_set[source_index]['name']
-            },
-            'destination': {
-                'port': 'in1',
-                'task': task_set[dest_index]['name']
-            }
+            "name": f"t{source_index + 1}-t{dest_index + 1}",
+            "source": {"port": "out1", "task": task_set[source_index]["name"]},
+            "destination": {"port": "in1", "task": task_set[dest_index]["name"]},
         }
