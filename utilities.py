@@ -10,6 +10,14 @@ class Utilities:
     def MsToNs(ms):
         return ms * 1000000
 
+    def calculate_utilisation(self, task_set):
+        utilisation = 0
+
+        for task in task_set:
+            utilisation += task["wcet"] / task["period"]
+
+        return utilisation
+
     def prepare_system(self, sys_config, task_set, dependencies):
         sys_config["EntityStore"] = task_set
         sys_config["DependencyStore"] = dependencies
@@ -19,7 +27,7 @@ class Utilities:
     def save_system(self, system, tasks_instances):
         system["EntityInstancesStore"] = tasks_instances
 
-        directory = "output"
+        directory = "system_config"
         base_filename = "system"
         extension = ".json"
 
@@ -39,7 +47,7 @@ class Utilities:
 
         return counter, system
 
-    def save_result(self, result, counter, system, goal, hyperperiod):
+    def save_result(self, result, counter, system, goal, hyperperiod, utilisation):
         fieldnames = [
             "index",
             "solution_time",
@@ -50,6 +58,7 @@ class Utilities:
             "num_tasks",
             "num_instances",
             "hyperperiod",
+            "utilisation",
         ]
 
         num_tasks = len(system["EntityStore"])
@@ -87,6 +96,7 @@ class Utilities:
                         "num_tasks": num_tasks,
                         "num_instances": num_instances,
                         "hyperperiod": hyperperiod,
+                        "utilisation": utilisation,
                         "num_cores_used": core_count,
                     }
                 )
@@ -120,6 +130,7 @@ class Utilities:
                         "num_tasks": num_tasks,
                         "num_instances": num_instances,
                         "hyperperiod": hyperperiod,
+                        "utilisation": utilisation,
                         "average_delay": avg_delay,
                     }
                 )

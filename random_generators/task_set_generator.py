@@ -14,6 +14,22 @@ class TaskSetGenerator:
 
         return tasks
 
+    def generate_with_utilisation_limit(
+        self, utilisation, max_init_offset, max_wcet, max_duration
+    ):
+        tasks = []
+        current_utilisation = 0
+        counter = 1
+
+        while current_utilisation < utilisation:
+            task = self.generate_task(counter, max_init_offset, max_wcet, max_duration)
+            tasks.append(task)
+
+            current_utilisation += task["wcet"] / task["period"]
+            counter += 1
+
+        return tasks
+
     def generate_task(self, index, max_init_offset, max_wcet, max_duration):
         periods = [
             1000000,
