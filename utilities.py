@@ -10,19 +10,11 @@ class Utilities:
     def MsToNs(ms):
         return ms * 1000000
 
-    def prepare_system(self, sys_config_path, task_set, dependencies):
-        f = open(sys_config_path)
-        sys_config = json.load(f)
+    def prepare_system(self, sys_config, task_set, dependencies):
+        sys_config["EntityStore"] = task_set
+        sys_config["DependencyStore"] = dependencies
 
-        system = {
-            "EntityStore": task_set,
-            "DependencyStore": dependencies,
-            "CoreStore": sys_config["CoreStore"],
-            "DeviceStore": sys_config["DeviceStore"],
-            "NetworkDelayStore": sys_config["NetworkDelayStore"],
-        }
-
-        return system
+        return sys_config
 
     def save_system(self, system, tasks_instances):
         system["EntityInstancesStore"] = tasks_instances
