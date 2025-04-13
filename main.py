@@ -1,14 +1,16 @@
 import os
 import argparse
 from utilities import Utilities
-from random_generators.task_set_generator import TaskSetGenerator
-from random_generators.dependency_set_generator import DependencySetGenerator
 from ilp.multicore import MultiCoreScheduler
+from random_generators.task_set_generator import TaskSetGenerator
+from random_generators.system_config_generator import SystemConfigGenerator
+from random_generators.dependency_set_generator import DependencySetGenerator
 
 
 def main():
     parser = argparse.ArgumentParser()
     utilities = Utilities()
+    sys_config_generator = SystemConfigGenerator()
     task_generator = TaskSetGenerator()
     dependency_generator = DependencySetGenerator()
     ilp_multicore = MultiCoreScheduler()
@@ -30,6 +32,15 @@ def main():
     # Optimisation goal
     parser.add_argument("-g", type=str)
 
+    # Number of cores to generate
+    parser.add_argument("-c", type=int)
+    # Number of devices to generate
+    parser.add_argument("-dev", type=int)
+    # Maximum WCDT for protocol delay
+    parser.add_argument("-p", type=float)
+    # Maximum WCDT for network delay
+    parser.add_argument("-n", type=float)
+
     args = parser.parse_args()
     del parser
 
@@ -41,13 +52,14 @@ def main():
     task_set = None
     dependencies = None
 
+    # Initalise values for arguments
     if args.t == None and args.u == None:
         print("Please specify either number of tasks, or system utiilisation value.")
         return 0
 
-    if args.f == None:
-        print("Please input system configuration")
-        return 0
+    # if args.f == None:
+    #     print("Please input system configuration")
+    #     return 0
 
     if args.g == None:
         print("Please specify optimisation goal")
@@ -75,6 +87,26 @@ def main():
     else:
         args.du = utilities.MsToNs(args.du)
 
+    if args.c == None:
+        args.c = 3
+
+    if args.dev == None:
+        args.dev = 2
+
+    if args.p == None:
+        args.p = 600000
+    else:
+        args.p = utilities.MsToNs(args.p)
+
+    if args.n == None:
+        args.n = 1000000
+    else:
+        args.n = utilities.MsToNs(args.n)
+
+    sys_config = sys_config_generator.generate_sys_config(
+        args.c, args.dev, args.p, args.n
+    )
+
     if args.t > 0:
         task_set = task_generator.generate_with_task_limit(
             args.t, args.o, args.e, args.du
@@ -83,11 +115,12 @@ def main():
     if args.d > 1:
         dependencies = dependency_generator.generate_dependencies(args.d, task_set)
 
-    system = utilities.prepare_system(args.f, task_set, dependencies)
+    system = utilities.prepare_system(sys_config, task_set, dependencies)
 
     tasks_instances, result, hyperperiod = ilp_multicore.multicore_core_scheduler(
         system, args.g
     )
+
     counter, system = utilities.save_system(system, tasks_instances)
     utilities.save_result(result, counter, system, args.g, hyperperiod)
 
