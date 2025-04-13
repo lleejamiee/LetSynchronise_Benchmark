@@ -8,12 +8,12 @@ from random_generators.dependency_set_generator import DependencySetGenerator
 
 
 def main():
-    parser = argparse.ArgumentParser()
     utilities = Utilities()
-    sys_config_generator = SystemConfigGenerator()
+    parser = argparse.ArgumentParser()
     task_generator = TaskSetGenerator()
-    dependency_generator = DependencySetGenerator()
     ilp_multicore = MultiCoreScheduler()
+    sys_config_generator = SystemConfigGenerator()
+    dependency_generator = DependencySetGenerator()
 
     # CPU Utilisation
     parser.add_argument("-u", type=float)
@@ -44,22 +44,18 @@ def main():
     args = parser.parse_args()
     del parser
 
-    if not os.path.exists("output"):
-        os.makedirs("output")
+    if not os.path.exists("system_config"):
+        os.makedirs("system_config")
     if not os.path.exists("results"):
         os.makedirs("results")
 
     task_set = None
     dependencies = None
 
-    # Initalise values for arguments
+    # Check if required arguments have been passed in
     if args.t == None and args.u == None:
         print("Please specify either number of tasks, or system utiilisation value.")
         return 0
-
-    # if args.f == None:
-    #     print("Please input system configuration")
-    #     return 0
 
     if args.g == None:
         print("Please specify optimisation goal")
@@ -69,9 +65,7 @@ def main():
         print("Please select valid optimisation goal (c or e2e)")
         return 0
 
-    if args.d == None:
-        args.d = args.t * (args.t - 1) / 2
-
+    # Initialise variables
     if args.o == None:
         args.o = 2000000
     else:
@@ -103,26 +97,47 @@ def main():
     else:
         args.n = utilities.MsToNs(args.n)
 
+    # Generate tasks based on the number of task specified
+    if args.t != None:
+        task_set = task_generator.generate_with_task_limit(
+            args.t, args.o, args.e, args.du
+        )
+    # Generate tasks based on the number of utilisation specified
+    elif args.u != None:
+        task_set = task_generator.generate_with_utilisation_limit(
+            args.u, args.o, args.e, args.du
+        )
+
+    if args.t == None:
+        args.t = len(task_set)
+
+    if args.u == None:
+        args.u = utilities.calculate_utilisation(task_set)
+
+    if args.d == None:
+        args.d = args.t * (args.t - 1) / 2
+
+    # Generate system configuration (cores, devices, network delays)
     sys_config = sys_config_generator.generate_sys_config(
         args.c, args.dev, args.p, args.n
     )
 
-    if args.t > 0:
-        task_set = task_generator.generate_with_task_limit(
-            args.t, args.o, args.e, args.du
-        )
-
-    if args.d > 1:
+    # Generate dependencies if there are more than 1 task in the task set
+    if args.t > 1:
         dependencies = dependency_generator.generate_dependencies(args.d, task_set)
 
+    # Prapare full system configuration for ILP calculation
     system = utilities.prepare_system(sys_config, task_set, dependencies)
 
+    # Performa ILP calculation
     tasks_instances, result, hyperperiod = ilp_multicore.multicore_core_scheduler(
         system, args.g
     )
 
+    # Save system configuration to file
     counter, system = utilities.save_system(system, tasks_instances)
-    utilities.save_result(result, counter, system, args.g, hyperperiod)
+    # Save result to file
+    utilities.save_result(result, counter, system, args.g, hyperperiod, args.u)
 
 
 if __name__ == "__main__":
