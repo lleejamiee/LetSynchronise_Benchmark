@@ -1,4 +1,5 @@
 import os
+import csv
 import json
 
 
@@ -9,7 +10,7 @@ class Utilities:
     def MsToNs(ms):
         return ms * 1000000
 
-    def save_system(self, sys_config_path, task_set, dependencies):
+    def prepare_system(self, sys_config_path, task_set, dependencies):
         f = open(sys_config_path)
         sys_config = json.load(f)
 
@@ -20,6 +21,11 @@ class Utilities:
             "DeviceStore": sys_config["DeviceStore"],
             "NetworkDelayStore": sys_config["NetworkDelayStore"],
         }
+
+        return system
+
+    def save_system(self, system, tasks_instances):
+        system["EntityInstancesStore"] = tasks_instances
 
         directory = "output"
         base_filename = "system"
@@ -36,7 +42,92 @@ class Utilities:
 
             counter += 1
 
-        # with open(file_path, "w") as outfile:
-        #     json.dump(system, outfile, indent=4)
+        with open(file_path, "w") as outfile:
+            json.dump(tasks_instances, outfile, indent=4)
 
-        return system
+        return counter, system
+
+    def save_result(self, result, counter, system, goal, hyperperiod):
+        fieldnames = [
+            "index",
+            "solution_time",
+            "CPU_time",
+            "sol_status",
+            "num_variables",
+            "num_constraints",
+            "num_tasks",
+            "num_instances",
+            "hyperperiod",
+        ]
+
+        num_tasks = len(system["EntityStore"])
+
+        num_instances = 0
+        for task in system["EntityInstancesStore"]:
+            num_instances += len(task["value"])
+
+        base_path = "results"
+
+        if goal == "c":
+            file_path = f"{base_path}/min_core_results.csv"
+            write_header = not os.path.exists(file_path)
+
+            core_count = 0
+            for v in result.variables():
+                if "u_" in v.name:
+                    core_count += v.varValue
+
+            with open(file_path, "a", newline="") as csvfile:
+                fieldnames.append("num_cores_used")
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+                if write_header:
+                    writer.writeheader()
+
+                writer.writerow(
+                    {
+                        "index": counter,
+                        "solution_time": result.solutionTime,
+                        "CPU_time": result.solutionCpuTime,
+                        "sol_status": result.sol_status,
+                        "num_variables": result.numVariables(),
+                        "num_constraints": result.numConstraints(),
+                        "num_tasks": num_tasks,
+                        "num_instances": num_instances,
+                        "hyperperiod": hyperperiod,
+                        "num_cores_used": core_count,
+                    }
+                )
+
+        elif goal == "e2e":
+            file_path = f"{base_path}/min_avg_e2e_results.csv"
+            write_header = not os.path.exists(file_path)
+
+            avg_delay = 0
+            for v in result.variables():
+                if "delay" in v.name:
+                    avg_delay += v.varValue
+
+            avg_delay = avg_delay / num_tasks
+
+            with open(file_path, "a", newline="") as csvfile:
+                fieldnames.append("average_delay")
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+                if write_header:
+                    writer.writeheader()
+
+                writer.writerow(
+                    {
+                        "index": counter,
+                        "solution_time": result.solutionTime,
+                        "CPU_time": result.solutionCpuTime,
+                        "sol_status": result.sol_status,
+                        "num_variables": result.numVariables(),
+                        "num_constraints": result.numConstraints(),
+                        "num_tasks": num_tasks,
+                        "num_instances": num_instances,
+                        "hyperperiod": hyperperiod,
+                        "average_delay": avg_delay,
+                    }
+                )

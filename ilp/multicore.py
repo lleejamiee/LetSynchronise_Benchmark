@@ -17,21 +17,18 @@ class MultiCoreScheduler:
         self.exec_end_vars = None
 
     def multicore_core_scheduler(self, system, method):
-        print(method)
         prob = LpProblem("Multicore_Core_Scheduling", LpMinimize)
         taskPeriods = [task["period"] for task in system["EntityStore"]]
         tasks = [task for task in system["EntityStore"]]
         self.cores = [core for core in system["CoreStore"]]
 
-        hyperPeriod = math.lcm(*taskPeriods)
-        N = hyperPeriod
-
-        print(hyperPeriod)
+        hyperperiod = math.lcm(*taskPeriods)
+        N = hyperperiod
 
         self.formatted_tasks = self.format_tasks(
             tasks, system.get("DependencyStore", None)
         )
-        self.tasks_instances = self.create_task_instances(hyperPeriod, tasks, N)
+        self.tasks_instances = self.create_task_instances(hyperperiod, tasks, N)
 
         # Variables
         # Variable for task instances, and their core assignment
@@ -222,27 +219,11 @@ class MultiCoreScheduler:
             objective = MinAvgE2e()
             objective.min_e2e_mc(N, system, prob, psi_task_core_vars, self)
 
-        # print(prob)
-
-        start_time = time.time()
-        print(f"start time: {start_time}")
-
         prob.solve()
 
-        end_time = time.time()
-        print(f"end time: {end_time}")
+        self.update_schedule()
 
-        print(f"time elapsed: {end_time - start_time}")
-        # self.update_schedule()
-
-        # schedule = {"EntityInstancesStore": self.tasks_instances}
-
-        for v in prob.variables():
-            print(f"{v.name} = {v.varValue}")
-
-        print(prob.sol_status)
-
-        # return prob.sol_status, schedule
+        return self.tasks_instances, prob, hyperperiod
 
     def format_tasks(self, tasks, dependencies):
         formatted_tasks = []

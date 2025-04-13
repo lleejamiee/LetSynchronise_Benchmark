@@ -27,14 +27,16 @@ def main():
     parser.add_argument("-du", type=float)
     # System config import
     parser.add_argument("-f", type=str)
-    # Optimisation method
-    parser.add_argument("-m", type=str)
+    # Optimisation goal
+    parser.add_argument("-g", type=str)
 
     args = parser.parse_args()
     del parser
 
     if not os.path.exists("output"):
         os.makedirs("output")
+    if not os.path.exists("results"):
+        os.makedirs("results")
 
     task_set = None
     dependencies = None
@@ -47,12 +49,12 @@ def main():
         print("Please input system configuration")
         return 0
 
-    if args.m == None:
-        print("Please specify optimisation method")
+    if args.g == None:
+        print("Please specify optimisation goal")
         return 0
 
-    if args.m != "c" and args.m != "e2e":
-        print("Please select valid optimisation method (c or e2e)")
+    if args.g != "c" and args.g != "e2e":
+        print("Please select valid optimisation goal (c or e2e)")
         return 0
 
     if args.d == None:
@@ -81,8 +83,13 @@ def main():
     if args.d > 1:
         dependencies = dependency_generator.generate_dependencies(args.d, task_set)
 
-    system = utilities.save_system(args.f, task_set, dependencies)
-    ilp_multicore.multicore_core_scheduler(system, args.m)
+    system = utilities.prepare_system(args.f, task_set, dependencies)
+
+    tasks_instances, result, hyperperiod = ilp_multicore.multicore_core_scheduler(
+        system, args.g
+    )
+    counter, system = utilities.save_system(system, tasks_instances)
+    utilities.save_result(result, counter, system, args.g, hyperperiod)
 
 
 if __name__ == "__main__":

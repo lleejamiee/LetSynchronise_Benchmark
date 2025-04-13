@@ -9,11 +9,6 @@
           "name": "c2",
           "speedup": 1,
           "device": "d2"
-        },
-        {
-            "name": "c3",
-            "speedup": 1,
-            "device": "d2"
         }
       ],
       "DeviceStore": [
