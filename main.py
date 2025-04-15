@@ -29,8 +29,6 @@ def main():
     parser.add_argument("-du", type=float)
     # System config import
     parser.add_argument("-f", type=str)
-    # Optimisation goal
-    parser.add_argument("-g", type=str)
 
     # Number of cores to generate
     parser.add_argument("-c", type=int)
@@ -52,20 +50,10 @@ def main():
     task_set = None
     dependencies = None
 
-    # Check if required arguments have been passed in
-    if args.t == None and args.u == None:
-        print("Please specify either number of tasks, or system utiilisation value.")
-        return 0
-
-    if args.g == None:
-        print("Please specify optimisation goal")
-        return 0
-
-    if args.g != "c" and args.g != "e2e":
-        print("Please select valid optimisation goal (c or e2e)")
-        return 0
-
     # Initialise variables
+    if args.t == None:
+        args.t = 3
+
     if args.o == None:
         args.o = 2000000
     else:
@@ -97,47 +85,66 @@ def main():
     else:
         args.n = utilities.MsToNs(args.n)
 
-    # Generate tasks based on the number of task specified
-    if args.t != None:
-        task_set = task_generator.generate_with_task_limit(
-            args.t, args.o, args.e, args.du
-        )
-    # Generate tasks based on the number of utilisation specified
-    elif args.u != None:
-        task_set = task_generator.generate_with_utilisation_limit(
-            args.u, args.o, args.e, args.du
-        )
-
-    if args.t == None:
-        args.t = len(task_set)
-
-    if args.u == None:
-        args.u = utilities.calculate_utilisation(task_set)
-
-    if args.d == None:
-        args.d = args.t * (args.t - 1) / 2
-
-    # Generate system configuration (cores, devices, network delays)
     sys_config = sys_config_generator.generate_sys_config(
         args.c, args.dev, args.p, args.n
     )
 
-    # Generate dependencies if there are more than 1 task in the task set
-    if args.t > 1:
-        dependencies = dependency_generator.generate_dependencies(args.d, task_set)
+    while True:
+        solvable = False
+        # Run the ILP multiple times to see if there are any outliers
+        run = 1
+        while run < 6:
+            task_set = task_generator.generate_with_task_limit(
+                args.t, args.o, args.e, args.du
+            )
+            args.u = utilities.calculate_utilisation(task_set)
+            args.d = args.t * (args.t - 1) / 2
+            dependencies = dependency_generator.generate_dependencies(args.d, task_set)
+            system = utilities.prepare_system(sys_config, task_set, dependencies)
 
-    # Prapare full system configuration for ILP calculation
-    system = utilities.prepare_system(sys_config, task_set, dependencies)
+            min_e2e_tasks_instances, min_e2e_result, min_e2e_hyperperiod = (
+                ilp_multicore.multicore_core_scheduler(system, "e2e")
+            )
 
-    # Performa ILP calculation
-    tasks_instances, result, hyperperiod = ilp_multicore.multicore_core_scheduler(
-        system, args.g
-    )
+            min_core_tasks_instances, min_core_result, min_core_hyperperiod = (
+                ilp_multicore.multicore_core_scheduler(system, "c")
+            )
 
-    # Save system configuration to file
-    counter, system = utilities.save_system(system, tasks_instances)
-    # Save result to file
-    utilities.save_result(result, counter, system, args.g, hyperperiod, args.u)
+            counter, min_e2e_system, min_core_system = utilities.save_system(
+                system, min_core_tasks_instances, min_e2e_tasks_instances, run
+            )
+
+            if min_core_result.sol_status == 1 and min_e2e_result.sol_status == 1:
+                solvable = True
+
+            utilities.save_result(
+                min_e2e_result,
+                counter,
+                min_e2e_system,
+                "e2e",
+                min_e2e_hyperperiod,
+                args.u,
+                run,
+            )
+            utilities.save_result(
+                min_core_result,
+                counter,
+                min_core_system,
+                "c",
+                min_core_hyperperiod,
+                args.u,
+                run,
+            )
+
+            run += 1
+
+        if not solvable:
+            args.c += 1
+            sys_config = sys_config_generator.generate_sys_config(
+                args.c, args.dev, args.p, args.n
+            )
+        else:
+            args.t += 1
 
 
 if __name__ == "__main__":
