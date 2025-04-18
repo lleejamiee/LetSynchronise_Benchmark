@@ -19,11 +19,13 @@ class MultiCoreScheduler:
     def multicore_core_scheduler(self, system, method):
         prob = LpProblem("Multicore_Core_Scheduling", LpMinimize)
         taskPeriods = [task["period"] for task in system["EntityStore"]]
+        taskOffsets = [task["initialOffset"] for task in system["EntityStore"]]
         tasks = [task for task in system["EntityStore"]]
         self.cores = [core for core in system["CoreStore"]]
 
         hyperperiod = math.lcm(*taskPeriods)
-        N = hyperperiod
+        hyperoffset = max(taskOffsets)
+        N = hyperperiod + hyperoffset
 
         self.formatted_tasks = self.format_tasks(
             tasks, system.get("DependencyStore", None)
@@ -223,7 +225,7 @@ class MultiCoreScheduler:
 
         self.update_schedule()
 
-        return self.tasks_instances, prob, hyperperiod
+        return self.tasks_instances, prob
 
     def format_tasks(self, tasks, dependencies):
         formatted_tasks = []

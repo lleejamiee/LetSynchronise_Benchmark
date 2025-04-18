@@ -29,8 +29,6 @@ def main():
     parser.add_argument("-du", type=float)
     # System config import
     parser.add_argument("-f", type=str)
-    # Optimisation goal
-    parser.add_argument("-g", type=str)
 
     # Number of cores to generate
     parser.add_argument("-c", type=int)
@@ -52,20 +50,13 @@ def main():
     task_set = None
     dependencies = None
 
-    # Check if required arguments have been passed in
-    if args.t == None and args.u == None:
-        print("Please specify either number of tasks, or system utiilisation value.")
-        return 0
-
-    if args.g == None:
-        print("Please specify optimisation goal")
-        return 0
-
-    if args.g != "c" and args.g != "e2e":
-        print("Please select valid optimisation goal (c or e2e)")
-        return 0
-
     # Initialise variables
+    if args.t == None:
+        args.t = 1
+
+    if args.u == None:
+        args.u = 0
+
     if args.o == None:
         args.o = 2000000
     else:
@@ -97,47 +88,73 @@ def main():
     else:
         args.n = utilities.MsToNs(args.n)
 
-    # Generate tasks based on the number of task specified
-    if args.t != None:
-        task_set = task_generator.generate_with_task_limit(
-            args.t, args.o, args.e, args.du
+    physical_sys1 = "physical_system/physical_system-01.json"
+    physical_sys2 = "physical_system/physical_system-02.json"
+    if not os.path.exists(physical_sys1) and not os.path.exists(physical_sys2):
+        sys_configs = sys_config_generator.generate_sys_config(
+            args.c, args.dev, args.p, args.n
         )
-    # Generate tasks based on the number of utilisation specified
-    elif args.u != None:
-        task_set = task_generator.generate_with_utilisation_limit(
-            args.u, args.o, args.e, args.du
-        )
+    else:
+        sys_configs = utilities.extract_physical_systems(physical_sys1, physical_sys2)
 
-    if args.t == None:
-        args.t = len(task_set)
+    while True:
+        # Run the ILP multiple times to see if there are any outliers
+        for i in range(len(sys_configs)):
+            solvable_count = 0
+            run = 1
+            # it needs to be 10 solvable
+            counter = 1
+            while solvable_count < 10:
+                task_set = task_generator.generate_with_task_limit(
+                    args.t, args.o, args.e, args.du
+                )
 
-    if args.u == None:
-        args.u = utilities.calculate_utilisation(task_set)
+                # If the utilisation is gt number of cores, break the loop
+                args.u = utilities.calculate_utilisation(task_set)
+                if args.u > len(sys_configs[i]["CoreStore"]):
+                    break
 
-    if args.d == None:
-        args.d = args.t * (args.t - 1) / 2
+                args.d = args.t * (args.t - 1) / 2
+                dependencies = dependency_generator.generate_dependencies(
+                    args.d, task_set
+                )
+                system = utilities.prepare_system(
+                    sys_configs[i], task_set, dependencies
+                )
 
-    # Generate system configuration (cores, devices, network delays)
-    sys_config = sys_config_generator.generate_sys_config(
-        args.c, args.dev, args.p, args.n
-    )
+                min_e2e_tasks_instances, min_e2e_result = (
+                    ilp_multicore.multicore_core_scheduler(system, "e2e")
+                )
 
-    # Generate dependencies if there are more than 1 task in the task set
-    if args.t > 1:
-        dependencies = dependency_generator.generate_dependencies(args.d, task_set)
+                min_core_tasks_instances, min_core_result = (
+                    ilp_multicore.multicore_core_scheduler(system, "c")
+                )
 
-    # Prapare full system configuration for ILP calculation
-    system = utilities.prepare_system(sys_config, task_set, dependencies)
+                if min_core_result.sol_status == 1 and min_e2e_result.sol_status == 1:
+                    solvable_count += 1
 
-    # Performa ILP calculation
-    tasks_instances, result, hyperperiod = ilp_multicore.multicore_core_scheduler(
-        system, args.g
-    )
+                counter, min_e2e_system, min_core_system = utilities.save_system(
+                    system,
+                    min_core_tasks_instances,
+                    min_e2e_tasks_instances,
+                    run,
+                    i + 1,
+                    counter,
+                )
 
-    # Save system configuration to file
-    counter, system = utilities.save_system(system, tasks_instances)
-    # Save result to file
-    utilities.save_result(result, counter, system, args.g, hyperperiod, args.u)
+                utilities.save_result(
+                    min_e2e_result,
+                    min_e2e_system,
+                    min_core_result,
+                    counter,
+                    args.u,
+                    run,
+                    i + 1,
+                )
+
+                run += 1
+
+        args.t += 1
 
 
 if __name__ == "__main__":
