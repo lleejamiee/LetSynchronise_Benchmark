@@ -10,6 +10,17 @@ class Utilities:
     def MsToNs(ms):
         return ms * 1000000
 
+    def extract_physical_systems(self, sys1_path, sys2_path):
+        sys_configs = []
+
+        system1 = open(sys1_path)
+        sys_configs.append(json.load(system1))
+
+        system2 = open(sys2_path)
+        sys_configs.append(json.load(system2))
+
+        return sys_configs
+
     def calculate_utilisation(self, task_set):
         utilisation = 0
 
@@ -25,7 +36,13 @@ class Utilities:
         return sys_config
 
     def save_system(
-        self, system, min_core_tasks_instances, min_e2e_task_instances, run
+        self,
+        system,
+        min_core_tasks_instances,
+        min_e2e_task_instances,
+        run,
+        config,
+        counter,
     ):
         min_e2e_system = system
         min_core_system = system
@@ -37,9 +54,10 @@ class Utilities:
         min_core_base_filename = "min_core_system"
         extension = ".json"
 
-        counter = 1
         while True:
-            file_name = f"{min_core_base_filename}{counter:03d}-{run}{extension}"
+            file_name = (
+                f"{config:02d}-{min_core_base_filename}{counter:03d}-{run}{extension}"
+            )
 
             file_path = os.path.join(directory, file_name)
 
@@ -52,109 +70,79 @@ class Utilities:
             json.dump(system, outfile, indent=4)
 
         file_path = os.path.join(
-            directory, f"{min_e2e_base_filename}{counter:03d}-{run}{extension}"
+            directory,
+            f"{config:02d}-{min_e2e_base_filename}{counter:03d}-{run}{extension}",
         )
         with open(file_path, "w") as outfile:
             json.dump(system, outfile, indent=4)
 
         return counter, min_e2e_system, min_core_system
 
-    def save_result(self, result, counter, system, goal, hyperperiod, utilisation, run):
+    def save_result(
+        self,
+        min_e2e_result,
+        min_e2e_system,
+        min_core_result,
+        counter,
+        utilisation,
+        run,
+        config,
+    ):
         fieldnames = [
             "index",
-            "solution_time",
-            "CPU_time",
-            "sol_status",
-            "num_variables",
-            "num_constraints",
-            "num_devices",
-            "num_cores",
             "num_tasks",
-            "num_dependencies",
-            "num_instances",
-            "hyperperiod",
             "utilisation",
+            "e2e_core_count",
+            "mc_core_count",
+            "e2e_avg_delay",
+            "e2e_sol_time",
+            "mc_sol_time",
+            "e2e_sol_status",
+            "mc_sol_status",
         ]
 
-        num_devices = len(system["DeviceStore"])
-        num_cores = len(system["CoreStore"])
-        num_tasks = len(system["EntityStore"])
-        num_dependencies = len(system["DependencyStore"])
-
-        num_instances = 0
-        for task in system["EntityInstancesStore"]:
-            num_instances += len(task["value"])
-
+        num_tasks = len(min_e2e_system["EntityStore"])
         base_path = "results"
 
-        if goal == "c":
-            file_path = f"{base_path}/min_core_results.csv"
-            write_header = not os.path.exists(file_path)
+        e2e_used_cores = set()
+        for v in min_e2e_result.variables():
+            print("variable", v)
+            if v.name.startswith("assigned_") and v.varValue == 1.0:
+                core_name = v.name.split("_'")[-1].rstrip("')")
+                e2e_used_cores.add(core_name)
 
-            core_count = 0
-            for v in result.variables():
-                if "u_" in v.name:
-                    core_count += v.varValue
+        min_core_core_count = 0
+        for v in min_core_result.variables():
+            if "u_" in v.name:
+                min_core_core_count += v.varValue
 
-            with open(file_path, "a", newline="") as csvfile:
-                fieldnames.append("num_cores_used")
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        avg_delay = 0
+        for v in min_e2e_result.variables():
+            if "delay" in v.name:
+                avg_delay += v.varValue
 
-                if write_header:
-                    writer.writeheader()
+        avg_delay = avg_delay / num_tasks
 
-                writer.writerow(
-                    {
-                        "index": f"{counter}-{run}",
-                        "solution_time": result.solutionTime,
-                        "CPU_time": result.solutionCpuTime,
-                        "sol_status": result.sol_status,
-                        "num_variables": result.numVariables(),
-                        "num_constraints": result.numConstraints(),
-                        "num_devices": num_devices,
-                        "num_cores": num_cores,
-                        "num_tasks": num_tasks,
-                        "num_dependencies": num_dependencies,
-                        "num_instances": num_instances,
-                        "hyperperiod": hyperperiod,
-                        "utilisation": utilisation,
-                        "num_cores_used": core_count,
-                    }
-                )
+        file_path = f"{base_path}/physical_system{config:02d}_results.csv"
+        write_header = not os.path.exists(file_path)
 
-        elif goal == "e2e":
-            file_path = f"{base_path}/min_avg_e2e_results.csv"
-            write_header = not os.path.exists(file_path)
+        with open(file_path, "a", newline="") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-            avg_delay = 0
-            for v in result.variables():
-                if "delay" in v.name:
-                    avg_delay += v.varValue
+            if write_header:
+                writer.writeheader()
 
-            avg_delay = avg_delay / num_tasks
-
-            with open(file_path, "a", newline="") as csvfile:
-                fieldnames.append("average_delay")
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-                if write_header:
-                    writer.writeheader()
-
-                writer.writerow(
-                    {
-                        "index": f"{counter}-{run}",
-                        "solution_time": result.solutionTime,
-                        "CPU_time": result.solutionCpuTime,
-                        "sol_status": result.sol_status,
-                        "num_variables": result.numVariables(),
-                        "num_constraints": result.numConstraints(),
-                        "num_devices": num_devices,
-                        "num_cores": num_cores,
-                        "num_tasks": num_tasks,
-                        "num_dependencies": num_dependencies,
-                        "num_instances": num_instances,
-                        "hyperperiod": hyperperiod,
-                        "utilisation": utilisation,
-                        "average_delay": avg_delay,
-                    }
-                )
+            writer.writerow(
+                {
+                    "index": f"{counter}-{run}",
+                    "num_tasks": num_tasks,
+                    "utilisation": utilisation,
+                    "e2e_core_count": len(e2e_used_cores),
+                    "mc_core_count": min_core_core_count,
+                    "e2e_avg_delay": avg_delay,
+                    "e2e_sol_time": min_e2e_result.solutionTime,
+                    "mc_sol_time": min_core_result.solutionTime,
+                    "e2e_sol_status": min_e2e_result.sol_status,
+                    "mc_sol_status": min_core_result.sol_status,
+                }
+            )

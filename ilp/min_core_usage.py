@@ -6,7 +6,6 @@ class MinCoreUsage:
         pass
 
     def min_core_usage(self, assigned, cores, tasks_instances, prob):
-        print("here")
         # Variable to track if a core is being used. (u_j)
         unused = LpVariable.dicts(
             "u", ((core["name"]) for core in cores), lowBound=0, upBound=1, cat="Binary"

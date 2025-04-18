@@ -52,7 +52,10 @@ def main():
 
     # Initialise variables
     if args.t == None:
-        args.t = 3
+        args.t = 1
+
+    if args.u == None:
+        args.u = 0
 
     if args.o == None:
         args.o = 2000000
@@ -85,66 +88,73 @@ def main():
     else:
         args.n = utilities.MsToNs(args.n)
 
-    sys_config = sys_config_generator.generate_sys_config(
-        args.c, args.dev, args.p, args.n
-    )
+    physical_sys1 = "physical_system/physical_system-01.json"
+    physical_sys2 = "physical_system/physical_system-02.json"
+    if not os.path.exists(physical_sys1) and not os.path.exists(physical_sys2):
+        sys_configs = sys_config_generator.generate_sys_config(
+            args.c, args.dev, args.p, args.n
+        )
+    else:
+        sys_configs = utilities.extract_physical_systems(physical_sys1, physical_sys2)
 
     while True:
-        solvable = False
         # Run the ILP multiple times to see if there are any outliers
-        run = 1
-        while run < 6:
-            task_set = task_generator.generate_with_task_limit(
-                args.t, args.o, args.e, args.du
-            )
-            args.u = utilities.calculate_utilisation(task_set)
-            args.d = args.t * (args.t - 1) / 2
-            dependencies = dependency_generator.generate_dependencies(args.d, task_set)
-            system = utilities.prepare_system(sys_config, task_set, dependencies)
+        for i in range(len(sys_configs)):
+            solvable_count = 0
+            run = 1
+            # it needs to be 10 solvable
+            counter = 1
+            while solvable_count < 10:
+                task_set = task_generator.generate_with_task_limit(
+                    args.t, args.o, args.e, args.du
+                )
 
-            min_e2e_tasks_instances, min_e2e_result, min_e2e_hyperperiod = (
-                ilp_multicore.multicore_core_scheduler(system, "e2e")
-            )
+                # If the utilisation is gt number of cores, break the loop
+                args.u = utilities.calculate_utilisation(task_set)
+                if args.u > len(sys_configs[i]["CoreStore"]):
+                    break
 
-            min_core_tasks_instances, min_core_result, min_core_hyperperiod = (
-                ilp_multicore.multicore_core_scheduler(system, "c")
-            )
+                args.d = args.t * (args.t - 1) / 2
+                dependencies = dependency_generator.generate_dependencies(
+                    args.d, task_set
+                )
+                system = utilities.prepare_system(
+                    sys_configs[i], task_set, dependencies
+                )
 
-            counter, min_e2e_system, min_core_system = utilities.save_system(
-                system, min_core_tasks_instances, min_e2e_tasks_instances, run
-            )
+                min_e2e_tasks_instances, min_e2e_result = (
+                    ilp_multicore.multicore_core_scheduler(system, "e2e")
+                )
 
-            if min_core_result.sol_status == 1 and min_e2e_result.sol_status == 1:
-                solvable = True
+                min_core_tasks_instances, min_core_result = (
+                    ilp_multicore.multicore_core_scheduler(system, "c")
+                )
 
-            utilities.save_result(
-                min_e2e_result,
-                counter,
-                min_e2e_system,
-                "e2e",
-                min_e2e_hyperperiod,
-                args.u,
-                run,
-            )
-            utilities.save_result(
-                min_core_result,
-                counter,
-                min_core_system,
-                "c",
-                min_core_hyperperiod,
-                args.u,
-                run,
-            )
+                if min_core_result.sol_status == 1 and min_e2e_result.sol_status == 1:
+                    solvable_count += 1
 
-            run += 1
+                counter, min_e2e_system, min_core_system = utilities.save_system(
+                    system,
+                    min_core_tasks_instances,
+                    min_e2e_tasks_instances,
+                    run,
+                    i + 1,
+                    counter,
+                )
 
-        if not solvable:
-            args.c += 1
-            sys_config = sys_config_generator.generate_sys_config(
-                args.c, args.dev, args.p, args.n
-            )
-        else:
-            args.t += 1
+                utilities.save_result(
+                    min_e2e_result,
+                    min_e2e_system,
+                    min_core_result,
+                    counter,
+                    args.u,
+                    run,
+                    i + 1,
+                )
+
+                run += 1
+
+        args.t += 1
 
 
 if __name__ == "__main__":
