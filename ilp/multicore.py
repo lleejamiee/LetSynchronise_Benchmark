@@ -1,5 +1,4 @@
 import math
-import pulp
 from pulp import GUROBI_CMD, LpProblem, LpMinimize, LpVariable, lpSum
 from ilp.min_core_usage import MinCoreUsage
 from ilp.min_avg_e2e import MinAvgE2e
@@ -13,7 +12,6 @@ class MultiCoreScheduler:
         self.assigned_vars = None
         self.exec_start_vars = None
         self.exec_end_vars = None
-        self.solver = GUROBI_CMD(msg=True)
 
     def multicore_core_scheduler(self, system, method):
         prob = LpProblem("Multicore_Core_Scheduling", LpMinimize)
@@ -220,7 +218,7 @@ class MultiCoreScheduler:
             objective = MinAvgE2e()
             objective.min_e2e_mc(N, system, prob, psi_task_core_vars, self)
 
-        prob.solve(pulp.GUROBI_CMD())
+        prob.solve(GUROBI_CMD())
 
         self.update_schedule()
 
