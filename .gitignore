@@ -4,3 +4,4 @@ __pycache__
 results
 system_config
 lp.txt
+gurobi.log

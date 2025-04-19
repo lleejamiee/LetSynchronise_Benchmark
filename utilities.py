@@ -106,19 +106,22 @@ class Utilities:
 
         e2e_used_cores = set()
         for v in min_e2e_result.variables():
-            print("variable", v)
-            if v.name.startswith("assigned_") and v.varValue == 1.0:
+            if (
+                v.name.startswith("assigned_")
+                and v.varValue != None
+                and v.varValue == 1.0
+            ):
                 core_name = v.name.split("_'")[-1].rstrip("')")
                 e2e_used_cores.add(core_name)
 
         min_core_core_count = 0
         for v in min_core_result.variables():
-            if "u_" in v.name:
+            if "u_" in v.name and v.varValue != None:
                 min_core_core_count += v.varValue
 
         avg_delay = 0
         for v in min_e2e_result.variables():
-            if "delay" in v.name:
+            if "delay" in v.name and v.varValue != None:
                 avg_delay += v.varValue
 
         avg_delay = avg_delay / num_tasks
