@@ -1,6 +1,7 @@
 import os
 import csv
 import json
+import copy
 
 
 class Utilities:
@@ -38,16 +39,17 @@ class Utilities:
     def save_system(
         self,
         system,
-        min_core_tasks_instances,
         min_e2e_task_instances,
+        min_core_tasks_instances,
         run,
         config,
         counter,
     ):
-        min_e2e_system = system
-        min_core_system = system
-        min_e2e_system["EntityInstancesStore"] = min_core_tasks_instances
-        min_core_system["EntityInstancesStore"] = min_e2e_task_instances
+        min_e2e_system = copy.deepcopy(system)
+        min_core_system = copy.deepcopy(system)
+
+        min_e2e_system["EntityInstancesStore"] = min_e2e_task_instances
+        min_core_system["EntityInstancesStore"] = min_core_tasks_instances
 
         directory = "system_config"
         min_e2e_base_filename = "min_e2e_system"
@@ -67,14 +69,14 @@ class Utilities:
             counter += 1
 
         with open(file_path, "w") as outfile:
-            json.dump(system, outfile, indent=4)
+            json.dump(min_core_system, outfile, indent=4)
 
         file_path = os.path.join(
             directory,
             f"{config:02d}-{min_e2e_base_filename}{counter:03d}-{run}{extension}",
         )
         with open(file_path, "w") as outfile:
-            json.dump(system, outfile, indent=4)
+            json.dump(min_e2e_system, outfile, indent=4)
 
         return counter, min_e2e_system, min_core_system
 
@@ -120,11 +122,13 @@ class Utilities:
                 min_core_core_count += v.varValue
 
         avg_delay = 0
+        num_instances = 0
         for v in min_e2e_result.variables():
             if "delay" in v.name and v.varValue != None:
                 avg_delay += v.varValue
+                num_instances += 1
 
-        avg_delay = avg_delay / num_tasks
+        avg_delay = avg_delay / num_instances
 
         file_path = f"{base_path}/physical_system{config:02d}_results.csv"
         write_header = not os.path.exists(file_path)

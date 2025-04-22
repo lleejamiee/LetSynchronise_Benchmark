@@ -1,4 +1,5 @@
 import os
+import json
 import argparse
 from utilities import Utilities
 from ilp.multicore import MultiCoreScheduler
@@ -97,6 +98,12 @@ def main():
     else:
         sys_configs = utilities.extract_physical_systems(physical_sys1, physical_sys2)
 
+    # file = open(args.f)
+    # system = json.load(file)
+    # min_e2e_tasks_instances, min_e2e_result = ilp_multicore.multicore_core_scheduler(
+    #     system, "e2e"
+    # )
+
     while True:
         # Run the ILP multiple times to see if there are any outliers
         for i in range(len(sys_configs)):
@@ -130,13 +137,19 @@ def main():
                     ilp_multicore.multicore_core_scheduler(system, "c")
                 )
 
+                print(
+                    "solution status",
+                    min_core_result.sol_status,
+                    min_e2e_result.sol_status,
+                )
+
                 if min_core_result.sol_status == 1 and min_e2e_result.sol_status == 1:
                     solvable_count += 1
 
                 counter, min_e2e_system, min_core_system = utilities.save_system(
                     system,
-                    min_core_tasks_instances,
                     min_e2e_tasks_instances,
+                    min_core_tasks_instances,
                     run,
                     i + 1,
                     counter,

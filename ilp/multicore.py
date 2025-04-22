@@ -22,12 +22,14 @@ class MultiCoreScheduler:
 
         hyperperiod = math.lcm(*taskPeriods)
         hyperoffset = max(taskOffsets)
-        N = hyperperiod + hyperoffset
+        makespan = (2 * hyperperiod + hyperoffset) * 5
+
+        N = makespan * 2
 
         self.formatted_tasks = self.format_tasks(
             tasks, system.get("DependencyStore", None)
         )
-        self.tasks_instances = self.create_task_instances(hyperperiod, tasks, N)
+        self.tasks_instances = self.create_task_instances(makespan, tasks, N)
 
         # Variables
         # Variable for task instances, and their core assignment
