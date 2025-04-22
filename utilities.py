@@ -93,10 +93,11 @@ class Utilities:
         fieldnames = [
             "index",
             "num_tasks",
+            "num_instances",
             "utilisation",
             "e2e_core_count",
             "mc_core_count",
-            "e2e_avg_delay",
+            "e2e_total_delay",
             "e2e_sol_time",
             "mc_sol_time",
             "e2e_sol_status",
@@ -104,6 +105,10 @@ class Utilities:
         ]
 
         num_tasks = len(min_e2e_system["EntityStore"])
+        num_tasks_instances = 0
+        for task in min_e2e_system["EntityInstancesStore"]:
+            num_instances += len(task["value"])
+
         base_path = "results"
 
         e2e_used_cores = set()
@@ -121,14 +126,10 @@ class Utilities:
             if "u_" in v.name and v.varValue != None:
                 min_core_core_count += v.varValue
 
-        avg_delay = 0
-        num_instances = 0
+        total_delay = 0
         for v in min_e2e_result.variables():
             if "delay" in v.name and v.varValue != None:
-                avg_delay += v.varValue
-                num_instances += 1
-
-        avg_delay = avg_delay / num_instances
+                total_delay += v.varValue
 
         file_path = f"{base_path}/physical_system{config:02d}_results.csv"
         write_header = not os.path.exists(file_path)
@@ -143,10 +144,11 @@ class Utilities:
                 {
                     "index": f"{counter}-{run}",
                     "num_tasks": num_tasks,
+                    "num_instances": num_tasks_instances,
                     "utilisation": utilisation,
                     "e2e_core_count": len(e2e_used_cores),
                     "mc_core_count": min_core_core_count,
-                    "e2e_avg_delay": avg_delay,
+                    "e2e_total_delay": total_delay,
                     "e2e_sol_time": min_e2e_result.solutionTime,
                     "mc_sol_time": min_core_result.solutionTime,
                     "e2e_sol_status": min_e2e_result.sol_status,
