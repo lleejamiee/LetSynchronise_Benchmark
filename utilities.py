@@ -107,7 +107,7 @@ class Utilities:
         num_tasks = len(min_e2e_system["EntityStore"])
         num_tasks_instances = 0
         for task in min_e2e_system["EntityInstancesStore"]:
-            num_instances += len(task["value"])
+            num_tasks_instances += len(task["value"])
 
         base_path = "results"
 
