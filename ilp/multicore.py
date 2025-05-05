@@ -22,7 +22,10 @@ class MultiCoreScheduler:
 
         hyperperiod = math.lcm(*taskPeriods)
         hyperoffset = max(taskOffsets)
-        makespan = (2 * hyperperiod + hyperoffset) * 5
+        makespan = (
+            hyperperiod * math.ceil((2 * hyperperiod + 2000000) / hyperperiod)
+            + hyperoffset
+        )
 
         N = makespan * 2
 
@@ -220,7 +223,7 @@ class MultiCoreScheduler:
             objective = MinAvgE2e()
             objective.min_e2e_mc(N, system, prob, psi_task_core_vars, self)
 
-        prob.solve(GUROBI_CMD())
+        prob.solve(GUROBI_CMD(options=[("TimeLimit", "300")]))
 
         self.update_schedule()
 
