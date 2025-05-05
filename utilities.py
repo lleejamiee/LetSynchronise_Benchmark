@@ -1,6 +1,7 @@
 import os
 import csv
 import json
+import copy
 
 
 class Utilities:
@@ -38,16 +39,17 @@ class Utilities:
     def save_system(
         self,
         system,
-        min_core_tasks_instances,
         min_e2e_task_instances,
+        min_core_tasks_instances,
         run,
         config,
         counter,
     ):
-        min_e2e_system = system
-        min_core_system = system
-        min_e2e_system["EntityInstancesStore"] = min_core_tasks_instances
-        min_core_system["EntityInstancesStore"] = min_e2e_task_instances
+        min_e2e_system = copy.deepcopy(system)
+        min_core_system = copy.deepcopy(system)
+
+        min_e2e_system["EntityInstancesStore"] = min_e2e_task_instances
+        min_core_system["EntityInstancesStore"] = min_core_tasks_instances
 
         directory = "system_config"
         min_e2e_base_filename = "min_e2e_system"
@@ -67,14 +69,14 @@ class Utilities:
             counter += 1
 
         with open(file_path, "w") as outfile:
-            json.dump(system, outfile, indent=4)
+            json.dump(min_core_system, outfile, indent=4)
 
         file_path = os.path.join(
             directory,
             f"{config:02d}-{min_e2e_base_filename}{counter:03d}-{run}{extension}",
         )
         with open(file_path, "w") as outfile:
-            json.dump(system, outfile, indent=4)
+            json.dump(min_e2e_system, outfile, indent=4)
 
         return counter, min_e2e_system, min_core_system
 
@@ -91,10 +93,11 @@ class Utilities:
         fieldnames = [
             "index",
             "num_tasks",
+            "num_instances",
             "utilisation",
             "e2e_core_count",
             "mc_core_count",
-            "e2e_avg_delay",
+            "e2e_total_delay",
             "e2e_sol_time",
             "mc_sol_time",
             "e2e_sol_status",
@@ -102,6 +105,10 @@ class Utilities:
         ]
 
         num_tasks = len(min_e2e_system["EntityStore"])
+        num_tasks_instances = 0
+        for task in min_e2e_system["EntityInstancesStore"]:
+            num_tasks_instances += len(task["value"])
+
         base_path = "results"
 
         e2e_used_cores = set()
@@ -119,12 +126,10 @@ class Utilities:
             if "u_" in v.name and v.varValue != None:
                 min_core_core_count += v.varValue
 
-        avg_delay = 0
+        total_delay = 0
         for v in min_e2e_result.variables():
             if "delay" in v.name and v.varValue != None:
-                avg_delay += v.varValue
-
-        avg_delay = avg_delay / num_tasks
+                total_delay += v.varValue
 
         file_path = f"{base_path}/physical_system{config:02d}_results.csv"
         write_header = not os.path.exists(file_path)
@@ -139,10 +144,11 @@ class Utilities:
                 {
                     "index": f"{counter}-{run}",
                     "num_tasks": num_tasks,
+                    "num_instances": num_tasks_instances,
                     "utilisation": utilisation,
                     "e2e_core_count": len(e2e_used_cores),
                     "mc_core_count": min_core_core_count,
-                    "e2e_avg_delay": avg_delay,
+                    "e2e_total_delay": total_delay,
                     "e2e_sol_time": min_e2e_result.solutionTime,
                     "mc_sol_time": min_core_result.solutionTime,
                     "e2e_sol_status": min_e2e_result.sol_status,
