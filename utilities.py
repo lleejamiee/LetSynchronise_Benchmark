@@ -55,29 +55,54 @@ class Utilities:
         min_core_system["EntityInstancesStore"] = min_core_tasks_instances
 
         directory = "system_config"
+        generic_filename = "system"
+        generic_extension = ".txt"
         min_e2e_base_filename = "min_e2e_system"
         min_core_base_filename = "min_core_system"
         extension = ".json"
 
-        while True:
-            file_name = (
-                f"{config:02d}-{min_core_base_filename}{counter:03d}-{run}{extension}"
-            )
+        subdir = "Not solved"
+        if successful:
+            subdir = "Solved"
 
-            file_path = os.path.join(directory, file_name)
+        # First find the counter value to use
+        while True:
+            file_path = os.path.join(
+                directory,
+                f"{config:02d}",
+                f"{generic_filename}{counter:03d}-{run}{generic_extension}"
+            )
 
             if not os.path.exists(file_path):
                 break
 
             counter += 1
 
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "w") as outfile:
+            outfile.write(subdir)
+        
+
+        # Now write the MC output
+        file_path = os.path.join(
+            directory,
+            f"{config:02d}",
+            subdir,
+            f"{min_e2e_base_filename}{counter:03d}-{run}{extension}",
+        )
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, "w") as outfile:
             json.dump(min_core_system, outfile, indent=4)
 
+
+        # And now the E2E output
         file_path = os.path.join(
             directory,
-            f"{config:02d}-{min_e2e_base_filename}{counter:03d}-{run}{extension}",
+            f"{config:02d}",
+            subdir,
+            f"{min_e2e_base_filename}{counter:03d}-{run}{extension}",
         )
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, "w") as outfile:
             json.dump(min_e2e_system, outfile, indent=4)
 
