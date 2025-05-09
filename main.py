@@ -6,6 +6,7 @@ from ilp.multicore import MultiCoreScheduler
 from random_generators.task_set_generator import TaskSetGenerator
 from random_generators.system_config_generator import SystemConfigGenerator
 from random_generators.dependency_set_generator import DependencySetGenerator
+import copy
 
 
 def main():
@@ -106,12 +107,16 @@ def main():
 
     while True:
         # Run the ILP multiple times to see if there are any outliers
+        print("Benchmarking for", args.t, "tasks")
         for i in range(len(sys_configs)):
+            print("-> Benchmarking for physical system", i)
             solvable_count = 0
             run = 1
             # it needs to be 10 solvable
             counter = 1
             while solvable_count < 10:
+                print("   -> Attempt #" + str(run))
+                print("      -> Generating tasks")
                 task_set = task_generator.generate_with_task_limit(
                     args.t, args.o, args.e, args.du
                 )
@@ -119,9 +124,12 @@ def main():
                 # If the utilisation is gt number of cores, break the loop
                 args.u = utilities.calculate_utilisation(task_set)
                 if args.u > len(sys_configs[i]["CoreStore"]):
+                    print("      -> Utilisation too high! Skipping")
                     continue
 
-                args.d = args.t * (args.t - 1) / 2
+                print("      -> Generating dependencies")
+                # args.d = args.t * (args.t - 1) / 2
+                args.d = 2 * (args.t-1)
                 dependencies = dependency_generator.generate_dependencies(
                     args.d, task_set
                 )
@@ -129,23 +137,49 @@ def main():
                     sys_configs[i], task_set, dependencies
                 )
 
+                print("      -> Scheduling for E2E")
                 min_e2e_tasks_instances, min_e2e_result = (
                     ilp_multicore.multicore_core_scheduler(system, "e2e")
                 )
 
+                print("      -> Scheduling for MC")
+                # For MC we first want to do the allocation
                 min_core_tasks_instances, min_core_result = (
                     ilp_multicore.multicore_core_scheduler(system, "c")
                 )
-
-                print(
-                    "solution status",
-                    min_core_result.sol_status,
-                    min_e2e_result.sol_status,
+                # Then create a copy of this with the cores fixed
+                system_copy = copy.deepcopy(system)
+                for task in system_copy["EntityStore"]:
+                    for solved_task in min_core_tasks_instances:
+                        if solved_task["name"] == task["name"]:
+                            task["core"] = solved_task["value"][0]["currentCore"]["name"]
+                            break
+                system_copy["EntityInstancesStore"] = min_core_tasks_instances
+                # And then run for E2E to get delays
+                print("      -> Calculating MC delays")
+                _, min_core_result_e2e = (
+                    ilp_multicore.multicore_core_scheduler(system_copy, "e2e", True)
                 )
 
-                if min_core_result.sol_status == 1 and min_e2e_result.sol_status == 1:
-                    solvable_count += 1
+                print(
+                    "      -> GUROBI solution statuses:",
+                    min_e2e_result.solverModel.Status,
+                    min_core_result.solverModel.Status,
+                )
+                # print(
+                #     "      -> PuLP solution statuses:",
+                #     min_e2e_result.sol_status,
+                #     min_core_result.sol_status,
+                # )
 
+                successful = False
+                # if min_core_result.sol_status == 1 and min_e2e_result.sol_status == 1:
+                if min_core_result.solverModel.Status == 2 and min_e2e_result.solverModel.Status == 2:
+                    successful = True
+                    solvable_count += 1
+                    print("      -> Solvable Count:", solvable_count)
+
+                print("      -> Saving system")
                 counter, min_e2e_system, min_core_system = utilities.save_system(
                     system,
                     min_e2e_tasks_instances,
@@ -153,12 +187,15 @@ def main():
                     run,
                     i + 1,
                     counter,
+                    successful
                 )
 
+                print("      -> Saving results")
                 utilities.save_result(
                     min_e2e_result,
                     min_e2e_system,
                     min_core_result,
+                    min_core_result_e2e,
                     counter,
                     args.u,
                     run,
