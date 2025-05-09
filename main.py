@@ -147,19 +147,25 @@ def main():
                 min_core_tasks_instances, min_core_result = (
                     ilp_multicore.multicore_core_scheduler(system, "c")
                 )
-                # Then create a copy of this with the cores fixed
-                system_copy = copy.deepcopy(system)
-                for task in system_copy["EntityStore"]:
-                    for solved_task in min_core_tasks_instances:
-                        if solved_task["name"] == task["name"]:
-                            task["core"] = solved_task["value"][0]["currentCore"]["name"]
-                            break
-                system_copy["EntityInstancesStore"] = min_core_tasks_instances
-                # And then run for E2E to get delays
-                print("      -> Calculating MC delays")
-                _, min_core_result_e2e = (
-                    ilp_multicore.multicore_core_scheduler(system_copy, "e2e", True)
-                )
+
+                # And if it was successful, calculate the delays
+                min_core_result_e2e = min_core_result
+                if min_core_result.solverModel.Status == 2:
+                    # Then create a copy of this with the cores fixed
+                    system_copy = copy.deepcopy(system)
+                    for task in system_copy["EntityStore"]:
+                        for solved_task in min_core_tasks_instances:
+                            if solved_task["name"] == task["name"]:
+                                task["core"] = solved_task["value"][0]["currentCore"]["name"]
+                                break
+
+                    system_copy["EntityInstancesStore"] = min_core_tasks_instances
+
+                    # And then run for E2E to get delays
+                    print("      -> Calculating MC delays")
+                    _, min_core_result_e2e = (
+                        ilp_multicore.multicore_core_scheduler(system_copy, "e2e", True)
+                    )
 
                 print(
                     "      -> GUROBI solution statuses:",
