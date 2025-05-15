@@ -88,7 +88,7 @@ class Utilities:
             directory,
             f"{config:02d}",
             subdir,
-            f"{min_e2e_base_filename}{counter:03d}-{run}{extension}",
+            f"{min_core_base_filename}{counter:03d}-{run}{extension}",
         )
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, "w") as outfile:
@@ -276,9 +276,10 @@ class Utilities:
     def get_average_delay(result):
         sum = 0
         count = 0
+        vars = result.variablesDict()
         for v in result.variables():
             if "bool_dep" in v.name and "__1" not in v.name and v.varValue == 1.0:
-                v_delay = result.variablesDict()[v.name.replace("bool_dep", "delay")]
+                v_delay = vars[v.name.replace("bool_dep", "delay")]
                 if v_delay != None:
                     sum += v_delay.varValue
                     count += 1
