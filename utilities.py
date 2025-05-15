@@ -3,6 +3,8 @@ import csv
 import json
 import copy
 
+from ilp.multicore import MultiCoreScheduler
+
 
 class Utilities:
     def __init__(self):
@@ -44,6 +46,7 @@ class Utilities:
         run,
         config,
         counter,
+        successful
     ):
         min_e2e_system = copy.deepcopy(system)
         min_core_system = copy.deepcopy(system)
@@ -52,29 +55,54 @@ class Utilities:
         min_core_system["EntityInstancesStore"] = min_core_tasks_instances
 
         directory = "system_config"
+        generic_filename = "system"
+        generic_extension = ".txt"
         min_e2e_base_filename = "min_e2e_system"
         min_core_base_filename = "min_core_system"
         extension = ".json"
 
-        while True:
-            file_name = (
-                f"{config:02d}-{min_core_base_filename}{counter:03d}-{run}{extension}"
-            )
+        subdir = "Not solved"
+        if successful:
+            subdir = "Solved"
 
-            file_path = os.path.join(directory, file_name)
+        # First find the counter value to use
+        while True:
+            file_path = os.path.join(
+                directory,
+                f"{config:02d}",
+                f"{generic_filename}{counter:03d}-{run}{generic_extension}"
+            )
 
             if not os.path.exists(file_path):
                 break
 
             counter += 1
 
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "w") as outfile:
+            outfile.write(subdir)
+        
+
+        # Now write the MC output
+        file_path = os.path.join(
+            directory,
+            f"{config:02d}",
+            subdir,
+            f"{min_core_base_filename}{counter:03d}-{run}{extension}",
+        )
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, "w") as outfile:
             json.dump(min_core_system, outfile, indent=4)
 
+
+        # And now the E2E output
         file_path = os.path.join(
             directory,
-            f"{config:02d}-{min_e2e_base_filename}{counter:03d}-{run}{extension}",
+            f"{config:02d}",
+            subdir,
+            f"{min_e2e_base_filename}{counter:03d}-{run}{extension}",
         )
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, "w") as outfile:
             json.dump(min_e2e_system, outfile, indent=4)
 
@@ -85,52 +113,79 @@ class Utilities:
         min_e2e_result,
         min_e2e_system,
         min_core_result,
+        min_core_result_e2e,
         counter,
         utilisation,
         run,
         config,
     ):
         fieldnames = [
+            # Generic fields
             "index",
             "num_tasks",
             "num_instances",
+            "num_task_dependencies",
+            "num_instance_dependencies",
+            "hyperperiod",
+            "hyperoffset",
+            "makespan",
+            "largeN",
             "utilisation",
+
+            # ILP results
             "e2e_core_count",
             "mc_core_count",
             "e2e_total_delay",
+            "mc_total_delay",
+            "e2e_bottom_dependencies",
+            "mc_bottom_dependencies",
+            "e2e_average_delay",
+            "mc_average_delay",
+            "e2e_objective",
+            "mc_objective",
             "e2e_sol_time",
             "mc_sol_time",
             "e2e_sol_status",
             "mc_sol_status",
+
+            # Gurobi-specific results
+            "e2e_num_constrs",
+            "mc_num_consts",
+            "e2e_num_vars",
+            "mc_num__vars",
+            "e2e_num_int_vars",
+            "mc_num_int_vars",
+            "e2e_num_bin_vars",
+            "mc_num_bin_vars",
+            "e2e_runtime",
+            "mc_runtime",
+            "e2e_work",
+            "mc_work",
+            "e2e_mem_used",
+            "mc_mem_used",
+            "e2e_max_mem_used",
+            "mc_max_mem_used",
+            "e2e_status",
+            "mc_status",
         ]
 
-        num_tasks = len(min_e2e_system["EntityStore"])
+        task_set = min_e2e_system["EntityStore"]
+        num_tasks = len(task_set)
+
         num_tasks_instances = 0
         for task in min_e2e_system["EntityInstancesStore"]:
             num_tasks_instances += len(task["value"])
+        
+        dependency_set = min_e2e_system["DependencyStore"]
+        num_task_dependencies = len(dependency_set)
+        
+        num_instance_dependencies = 0
+        for dependency in dependency_set:
+            task = next((x for x in min_e2e_system["EntityInstancesStore"] if x["name"] == dependency["destination"]["task"]), None)
+            if task != None:
+                num_instance_dependencies += len(task["value"])
 
         base_path = "results"
-
-        e2e_used_cores = set()
-        for v in min_e2e_result.variables():
-            if (
-                v.name.startswith("assigned_")
-                and v.varValue != None
-                and v.varValue == 1.0
-            ):
-                core_name = v.name.split("_'")[-1].rstrip("')")
-                e2e_used_cores.add(core_name)
-
-        min_core_core_count = 0
-        for v in min_core_result.variables():
-            if "u_" in v.name and v.varValue != None:
-                min_core_core_count += v.varValue
-
-        total_delay = 0
-        for v in min_e2e_result.variables():
-            if "delay" in v.name and v.varValue != None:
-                total_delay += v.varValue
-
         file_path = f"{base_path}/physical_system{config:02d}_results.csv"
         write_header = not os.path.exists(file_path)
 
@@ -142,16 +197,95 @@ class Utilities:
 
             writer.writerow(
                 {
+                    # Generic fields
                     "index": f"{counter}-{run}",
                     "num_tasks": num_tasks,
                     "num_instances": num_tasks_instances,
+                    "num_task_dependencies": num_task_dependencies,
+                    "num_instance_dependencies": num_instance_dependencies,
                     "utilisation": utilisation,
-                    "e2e_core_count": len(e2e_used_cores),
-                    "mc_core_count": min_core_core_count,
-                    "e2e_total_delay": total_delay,
-                    "e2e_sol_time": min_e2e_result.solutionTime,
-                    "mc_sol_time": min_core_result.solutionTime,
+                    "hyperperiod": MultiCoreScheduler.calculate_hyperperiod(task_set),
+                    "hyperoffset": MultiCoreScheduler.calculate_hyperoffset(task_set),
+                    "makespan": MultiCoreScheduler.calculate_makespan(task_set),
+                    "largeN": MultiCoreScheduler.calculate_largeN(task_set),
+
+                    # ILP results
+                    "e2e_core_count": self.get_num_used_cores(min_e2e_result),
+                    "mc_core_count": self.get_num_used_cores(min_core_result),
+                    "e2e_total_delay": self.get_total_delay(min_e2e_result),
+                    "mc_total_delay": self.get_total_delay(min_core_result_e2e),
+                    "e2e_bottom_dependencies": self.get_bottom_dependencies(min_e2e_result),
+                    "mc_bottom_dependencies": self.get_bottom_dependencies(min_core_result_e2e),
+                    "e2e_average_delay": self.get_average_delay(min_e2e_result),
+                    "mc_average_delay": self.get_average_delay(min_core_result_e2e),
+                    "e2e_objective": min_e2e_result.objective.value(),
+                    "mc_objective": min_core_result.objective.value(),
+                    "e2e_sol_time": min_e2e_result.solutionCpuTime,
+                    "mc_sol_time": min_core_result.solutionCpuTime,
                     "e2e_sol_status": min_e2e_result.sol_status,
                     "mc_sol_status": min_core_result.sol_status,
+
+                    # Gurobi-specific results
+                    "e2e_num_constrs": min_e2e_result.solverModel.NumConstrs,
+                    "mc_num_consts": min_core_result.solverModel.NumConstrs,
+                    "e2e_num_vars": min_e2e_result.solverModel.NumVars,
+                    "mc_num__vars": min_core_result.solverModel.NumVars,
+                    "e2e_num_int_vars": min_e2e_result.solverModel.NumIntVars,
+                    "mc_num_int_vars": min_core_result.solverModel.NumIntVars,
+                    "e2e_num_bin_vars": min_e2e_result.solverModel.NumBinVars,
+                    "mc_num_bin_vars": min_core_result.solverModel.NumBinVars,
+                    "e2e_runtime": min_e2e_result.solverModel.Runtime,
+                    "mc_runtime": min_core_result.solverModel.Runtime,
+                    "e2e_work": min_e2e_result.solverModel.Work,
+                    "mc_work": min_core_result.solverModel.Work,
+                    "e2e_mem_used": min_e2e_result.solverModel.MemUsed,
+                    "mc_mem_used": min_core_result.solverModel.MemUsed,
+                    "e2e_max_mem_used": min_e2e_result.solverModel.MaxMemUsed,
+                    "mc_max_mem_used": min_core_result.solverModel.MaxMemUsed,
+                    "e2e_status": min_e2e_result.solverModel.Status,
+                    "mc_status": min_core_result.solverModel.Status,
                 }
             )
+    
+    @staticmethod
+    def get_num_used_cores(result):
+        for v in result.variables():
+            if "cores_used" in v.name and v.varValue != None:
+                return v.varValue
+    
+        return -1
+    
+    @staticmethod
+    def get_total_delay(result):
+        for v in result.variables():
+            if "total_delay" in v.name and v.varValue != None:
+                return v.varValue
+    
+        return -1
+
+    @staticmethod
+    def get_bottom_dependencies(result):
+        bottom_dependencies = 0
+        for v in result.variables():
+            if "bool_dep" in v.name and "__1" in v.name and v.varValue == 1.0:
+                bottom_dependencies += 1
+    
+        return bottom_dependencies
+
+    @staticmethod
+    def get_average_delay(result):
+        sum = 0
+        count = 0
+        vars = result.variablesDict()
+        for v in result.variables():
+            if "bool_dep" in v.name and "__1" not in v.name and v.varValue == 1.0:
+                v_delay = vars[v.name.replace("bool_dep", "delay")]
+                if v_delay != None:
+                    sum += v_delay.varValue
+                    count += 1
+        
+        if count > 0:
+            return sum / count
+        
+        return -1
+
