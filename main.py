@@ -122,7 +122,7 @@ def main():
                 )
 
                 # If the utilisation is gt number of cores, break the loop
-                args.u = utilities.calculate_utilisation(task_set)
+                args.u = Utilities.calculate_utilisation(task_set)
                 if args.u > len(sys_configs[i]["CoreStore"]):
                     print("      -> Utilisation too high! Skipping")
                     continue

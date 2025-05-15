@@ -24,7 +24,8 @@ class Utilities:
 
         return sys_configs
 
-    def calculate_utilisation(self, task_set):
+    @staticmethod
+    def calculate_utilisation(task_set):
         utilisation = 0
 
         for task in task_set:
