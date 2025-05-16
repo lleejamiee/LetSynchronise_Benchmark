@@ -3,6 +3,7 @@ import csv
 import math
 import copy
 import json
+import time
 
 from ilp.multicore import MultiCoreScheduler
 from utilities import Utilities
@@ -38,8 +39,12 @@ def main():
                         tasks_lowest_util = copy.deepcopy(sorted_tasks)
                         tasks_lowest_core = copy.deepcopy(sorted_tasks)
 
+                        start = time.time()
                         tasks_lowest_util = lowest_utilisation(cores_lowest_util, tasks_lowest_util, max_utilisation)
+                        lowest_util_time = time.time() - start
+                        start = time.time()
                         tasks_lowest_core = lowest_core_index(cores_lowest_core, tasks_lowest_core, max_utilisation)
+                        lowest_core_time = time.time() - start
 
                         system_lowest_util = copy.deepcopy(data)
                         system_lowest_core = copy.deepcopy(data)
@@ -61,7 +66,7 @@ def main():
                         save_system(system_lowest_core, system.path, "heur_core_"+str(max_utilisation))
 
                         index = system.name.replace(BASE_FILENAME+"_system", "").replace(".json", "")
-                        save_results(system_lowest_util, lowest_util_result_e2e, lowest_core_result_e2e, physical_system.name, max_utilisation, index)
+                        save_results(system_lowest_util, lowest_util_time, lowest_util_result_e2e, lowest_core_time, lowest_core_result_e2e, physical_system.name, max_utilisation, index)
 
 
 def sort_tasks(tasks):
@@ -120,7 +125,7 @@ def save_system(system, original_path, type):
     with open(new_filename, "w") as outfile:
         json.dump(system, outfile, indent=4)
 
-def save_results(system, lowest_util_result, lowest_core_result, config, max_utilisation, index):
+def save_results(system, lowest_util_time, lowest_util_result, lowest_core_time, lowest_core_result, config, max_utilisation, index):
     fieldnames = [
         # Generic fields
         "index",
@@ -149,6 +154,13 @@ def save_results(system, lowest_util_result, lowest_core_result, config, max_uti
         # Gurobi-specific results
         "lu_status",
         "lc_status",
+        "lu_ilp_runtime",
+        "lc_ilp_runtime",
+
+        # Other
+        "lu_allocation_time",
+        "lc_allocation_time",
+
     ]
 
     task_set = system["EntityStore"]
@@ -206,6 +218,14 @@ def save_results(system, lowest_util_result, lowest_core_result, config, max_uti
                 # Gurobi-specific results
                 "lu_status": lowest_util_result.solverModel.Status,
                 "lc_status": lowest_core_result.solverModel.Status,
+                "lu_ilp_runtime": lowest_util_result.solverModel.Runtime,
+                "lc_ilp_runtime": lowest_core_result.solverModel.Runtime,
+
+                # Other
+                "lu_allocation_time": lowest_util_time,
+                "lc_allocation_time": lowest_core_time,
+                "lu_total_time": lowest_util_result.solverModel.Runtime + lowest_util_time,
+                "lc_total_time": lowest_core_result.solverModel.Runtime + lowest_core_time,
             }
         )
 
