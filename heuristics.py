@@ -160,6 +160,8 @@ def save_results(system, lowest_util_time, lowest_util_result, lowest_core_time,
         # Other
         "lu_allocation_time",
         "lc_allocation_time",
+        "lu_total_time",
+        "lc_total_time",
 
     ]
 
