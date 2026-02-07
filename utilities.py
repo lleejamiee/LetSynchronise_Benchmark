@@ -46,7 +46,7 @@ class Utilities:
         run,
         config,
         counter,
-        successful
+        successful,
     ):
         min_e2e_system = copy.deepcopy(system)
         min_core_system = copy.deepcopy(system)
@@ -70,7 +70,7 @@ class Utilities:
             file_path = os.path.join(
                 directory,
                 f"{config:02d}",
-                f"{generic_filename}{counter:03d}-{run}{generic_extension}"
+                f"{generic_filename}{counter:03d}-{run}{generic_extension}",
             )
 
             if not os.path.exists(file_path):
@@ -81,7 +81,6 @@ class Utilities:
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, "w") as outfile:
             outfile.write(subdir)
-        
 
         # Now write the MC output
         file_path = os.path.join(
@@ -93,7 +92,6 @@ class Utilities:
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
         with open(file_path, "w") as outfile:
             json.dump(min_core_system, outfile, indent=4)
-
 
         # And now the E2E output
         file_path = os.path.join(
@@ -131,7 +129,6 @@ class Utilities:
             "makespan",
             "largeN",
             "utilisation",
-
             # ILP results
             "e2e_core_count",
             "mc_core_count",
@@ -147,7 +144,6 @@ class Utilities:
             "mc_sol_time",
             "e2e_sol_status",
             "mc_sol_status",
-
             # Gurobi-specific results
             "e2e_num_constrs",
             "mc_num_consts",
@@ -175,13 +171,20 @@ class Utilities:
         num_tasks_instances = 0
         for task in min_e2e_system["EntityInstancesStore"]:
             num_tasks_instances += len(task["value"])
-        
+
         dependency_set = min_e2e_system["DependencyStore"]
         num_task_dependencies = len(dependency_set)
-        
+
         num_instance_dependencies = 0
         for dependency in dependency_set:
-            task = next((x for x in min_e2e_system["EntityInstancesStore"] if x["name"] == dependency["destination"]["task"]), None)
+            task = next(
+                (
+                    x
+                    for x in min_e2e_system["EntityInstancesStore"]
+                    if x["name"] == dependency["destination"]["task"]
+                ),
+                None,
+            )
             if task != None:
                 num_instance_dependencies += len(task["value"])
 
@@ -208,14 +211,17 @@ class Utilities:
                     "hyperoffset": MultiCoreScheduler.calculate_hyperoffset(task_set),
                     "makespan": MultiCoreScheduler.calculate_makespan(task_set),
                     "largeN": MultiCoreScheduler.calculate_largeN(task_set),
-
                     # ILP results
                     "e2e_core_count": self.get_num_used_cores(min_e2e_result),
                     "mc_core_count": self.get_num_used_cores(min_core_result),
                     "e2e_total_delay": self.get_total_delay(min_e2e_result),
                     "mc_total_delay": self.get_total_delay(min_core_result_e2e),
-                    "e2e_bottom_dependencies": self.get_bottom_dependencies(min_e2e_result),
-                    "mc_bottom_dependencies": self.get_bottom_dependencies(min_core_result_e2e),
+                    "e2e_bottom_dependencies": self.get_bottom_dependencies(
+                        min_e2e_result
+                    ),
+                    "mc_bottom_dependencies": self.get_bottom_dependencies(
+                        min_core_result_e2e
+                    ),
                     "e2e_average_delay": self.get_average_delay(min_e2e_result),
                     "mc_average_delay": self.get_average_delay(min_core_result_e2e),
                     "e2e_objective": min_e2e_result.objective.value(),
@@ -224,7 +230,6 @@ class Utilities:
                     "mc_sol_time": min_core_result.solutionCpuTime,
                     "e2e_sol_status": min_e2e_result.sol_status,
                     "mc_sol_status": min_core_result.sol_status,
-
                     # Gurobi-specific results
                     "e2e_num_constrs": min_e2e_result.solverModel.NumConstrs,
                     "mc_num_consts": min_core_result.solverModel.NumConstrs,
@@ -246,21 +251,21 @@ class Utilities:
                     "mc_status": min_core_result.solverModel.Status,
                 }
             )
-    
+
     @staticmethod
     def get_num_used_cores(result):
         for v in result.variables():
             if "cores_used" in v.name and v.varValue != None:
                 return v.varValue
-    
+
         return -1
-    
+
     @staticmethod
     def get_total_delay(result):
         for v in result.variables():
             if "total_delay" in v.name and v.varValue != None:
                 return v.varValue
-    
+
         return -1
 
     @staticmethod
@@ -269,7 +274,7 @@ class Utilities:
         for v in result.variables():
             if "bool_dep" in v.name and "__1" in v.name and v.varValue == 1.0:
                 bottom_dependencies += 1
-    
+
         return bottom_dependencies
 
     @staticmethod
@@ -283,9 +288,8 @@ class Utilities:
                 if v_delay != None:
                     sum += v_delay.varValue
                     count += 1
-        
+
         if count > 0:
             return sum / count
-        
-        return -1
 
+        return -1

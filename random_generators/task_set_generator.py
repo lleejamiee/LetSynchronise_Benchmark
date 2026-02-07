@@ -3,7 +3,18 @@ import random
 
 class TaskSetGenerator:
     def __init__(self):
-        pass
+        self.periods = [
+            1000000,
+            2000000,
+            5000000,
+            10000000,
+            20000000,
+            # 50000000,
+            # 100000000,
+            # 200000000,
+            # 500000000,
+            # 1000000000,
+        ]
 
     def generate_with_task_limit(
         self, num_tasks, max_init_offset, max_wcet, max_duration
@@ -31,20 +42,7 @@ class TaskSetGenerator:
         return tasks
 
     def generate_task(self, index, max_init_offset, max_wcet, max_duration):
-        periods = [
-            1000000,
-            2000000,
-            5000000,
-            10000000,
-            20000000,
-            # 50000000,
-            # 100000000,
-            # 200000000,
-            # 500000000,
-            # 1000000000,
-        ]
-
-        period = periods[random.randint(0, len(periods) - 1)]
+        period = self.periods[random.randint(0, len(self.periods) - 1)]
         if max_duration > period:
             max_duration = period
         duration = random.randint(1, max_duration)

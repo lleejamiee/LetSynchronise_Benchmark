@@ -4,6 +4,7 @@ import argparse
 from utilities import Utilities
 from ilp.multicore import MultiCoreScheduler
 from random_generators.task_set_generator import TaskSetGenerator
+from random_generators.UUNIFAST_generator import UUNIFASTGenerator
 from random_generators.system_config_generator import SystemConfigGenerator
 from random_generators.dependency_set_generator import DependencySetGenerator
 import copy
@@ -13,6 +14,7 @@ def main():
     utilities = Utilities()
     parser = argparse.ArgumentParser()
     task_generator = TaskSetGenerator()
+    unnifast_generator = UUNIFASTGenerator()
     ilp_multicore = MultiCoreScheduler()
     sys_config_generator = SystemConfigGenerator()
     dependency_generator = DependencySetGenerator()
@@ -54,10 +56,7 @@ def main():
 
     # Initialise variables
     if args.t == None:
-        args.t = 1
-
-    if args.u == None:
-        args.u = 0
+        args.t = 30
 
     if args.o == None:
         args.o = 2000000
@@ -110,26 +109,39 @@ def main():
         print("Benchmarking for", args.t, "tasks")
         for i in range(len(sys_configs)):
             print("-> Benchmarking for physical system", i)
+            # Initialise utilisation here to set the default value based on the number of cores available
+            if args.u == None:
+                # Set the maximum core utilisation value to 65%
+                args.u = len(sys_configs[i]["CoreStore"]) * 0.65
+                # args.u = 0.65
+
             solvable_count = 0
             run = 1
             # it needs to be 10 solvable
             counter = 1
+
             while solvable_count < 10:
                 print("   -> Attempt #" + str(run))
                 print("      -> Generating tasks")
-                task_set = task_generator.generate_with_task_limit(
-                    args.t, args.o, args.e, args.du
+                # task_set = task_generator.generate_with_task_limit(
+                #     args.t, args.o, args.e, args.du, args.u
+                # )
+
+                task_set = unnifast_generator.gen_taskset(
+                    args.t, 1000000, 20000000, 2000000, args.u
                 )
 
                 # If the utilisation is gt number of cores, break the loop
-                args.u = utilities.calculate_utilisation(task_set)
-                if args.u > len(sys_configs[i]["CoreStore"]):
+                total_utilisation = utilities.calculate_utilisation(task_set)
+                if total_utilisation > len(sys_configs[i]["CoreStore"]):
                     print("      -> Utilisation too high! Skipping")
                     continue
 
+                print(task_set)
+
                 print("      -> Generating dependencies")
                 # args.d = args.t * (args.t - 1) / 2
-                args.d = 2 * (args.t-1)
+                args.d = 2 * (args.t - 1)
                 dependencies = dependency_generator.generate_dependencies(
                     args.d, task_set
                 )
@@ -156,15 +168,17 @@ def main():
                     for task in system_copy["EntityStore"]:
                         for solved_task in min_core_tasks_instances:
                             if solved_task["name"] == task["name"]:
-                                task["core"] = solved_task["value"][0]["currentCore"]["name"]
+                                task["core"] = solved_task["value"][0]["currentCore"][
+                                    "name"
+                                ]
                                 break
 
                     system_copy["EntityInstancesStore"] = min_core_tasks_instances
 
                     # And then run for E2E to get delays
                     print("      -> Calculating MC delays")
-                    _, min_core_result_e2e = (
-                        ilp_multicore.multicore_core_scheduler(system_copy, "e2e", True)
+                    _, min_core_result_e2e = ilp_multicore.multicore_core_scheduler(
+                        system_copy, "e2e", True
                     )
 
                 print(
@@ -180,7 +194,10 @@ def main():
 
                 successful = False
                 # if min_core_result.sol_status == 1 and min_e2e_result.sol_status == 1:
-                if min_core_result.solverModel.Status == 2 and min_e2e_result.solverModel.Status == 2:
+                if (
+                    min_core_result.solverModel.Status == 2
+                    and min_e2e_result.solverModel.Status == 2
+                ):
                     successful = True
                     solvable_count += 1
                     print("      -> Solvable Count:", solvable_count)
@@ -193,7 +210,7 @@ def main():
                     run,
                     i + 1,
                     counter,
-                    successful
+                    successful,
                 )
 
                 print("      -> Saving results")
@@ -203,7 +220,7 @@ def main():
                     min_core_result,
                     min_core_result_e2e,
                     counter,
-                    args.u,
+                    total_utilisation,
                     run,
                     i + 1,
                 )
