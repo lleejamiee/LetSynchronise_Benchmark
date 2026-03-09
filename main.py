@@ -123,9 +123,6 @@ def main():
             while solvable_count < 10:
                 print("   -> Attempt #" + str(run))
                 print("      -> Generating tasks")
-                # task_set = task_generator.generate_with_task_limit(
-                #     args.t, args.o, args.e, args.du, args.u
-                # )
 
                 task_set = unnifast_generator.gen_taskset(
                     args.t, 1000000, 20000000, 2000000, args.u
@@ -137,16 +134,17 @@ def main():
                     print("      -> Utilisation too high! Skipping")
                     continue
 
-                print(task_set)
-
                 print("      -> Generating dependencies")
-                # args.d = args.t * (args.t - 1) / 2
                 args.d = 2 * (args.t - 1)
                 dependencies = dependency_generator.generate_dependencies(
                     args.d, task_set
                 )
+                event_chains = dependency_generator.event_chain_generator(
+                    dependencies, task_set
+                )
+
                 system = utilities.prepare_system(
-                    sys_configs[i], task_set, dependencies
+                    sys_configs[i], task_set, dependencies, event_chains
                 )
 
                 print("      -> Scheduling for E2E")

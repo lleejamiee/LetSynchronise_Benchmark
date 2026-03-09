@@ -25,6 +25,7 @@ class MultiCoreScheduler:
 
         tasks = system["EntityStore"]
         dependencies = system["DependencyStore"]
+        event_chains = system["EventChainStore"]
         self.task_data = self.format_tasks(tasks, dependencies)
 
         makespan = self.calculate_makespan(tasks)
@@ -120,7 +121,11 @@ class MultiCoreScheduler:
 
         # Variable to track if a core is being used (u_j)
         core_used_vars = LpVariable.dicts(
-            "u", ((core["name"]) for core in self.cores), lowBound=0, upBound=1, cat="Binary"
+            "u",
+            ((core["name"]) for core in self.cores),
+            lowBound=0,
+            upBound=1,
+            cat="Binary",
         )
         cores_used_var = LpVariable("cores_used", cat="Integer")
 
@@ -189,7 +194,7 @@ class MultiCoreScheduler:
                 )
                 == 1
             )
-        
+
         # Restrict cores or devices if required
         for task in self.tasks_instances:
             requiredCore = self.get_task_data(task["name"])["requiredCore"]
@@ -199,13 +204,14 @@ class MultiCoreScheduler:
                 prob += self.assigned_vars[(task["name"], requiredCore)] == 1
 
             if requiredDevice != None:
-                prob += lpSum(
-                    self.assigned_vars[(task["name"], core["name"])]
-                    for core in cores
-                    if core["device"] == requiredDevice
-                ) == 1
-            
-
+                prob += (
+                    lpSum(
+                        self.assigned_vars[(task["name"], core["name"])]
+                        for core in self.cores
+                        if core["device"] == requiredDevice
+                    )
+                    == 1
+                )
 
         # 2b. A task' total execution time must be equal to the specified execution time. (From C49 - C82)
         # 2c. A task's execution start time must be greater than or equal to its LET start time,
@@ -224,13 +230,32 @@ class MultiCoreScheduler:
 
                 # If timings have been pre-determined, constrain them here
                 if fixed_timings and "EntityInstancesStore" in system:
-                    task_value = next((x for x in system["EntityInstancesStore"] if x["name"] == task["name"]), None)
+                    task_value = next(
+                        (
+                            x
+                            for x in system["EntityInstancesStore"]
+                            if x["name"] == task["name"]
+                        ),
+                        None,
+                    )
                     if task_value != None:
-                        instance_value = next((x for x in task_value["value"] if x["instance"] == instance["instance"]), None)
+                        instance_value = next(
+                            (
+                                x
+                                for x in task_value["value"]
+                                if x["instance"] == instance["instance"]
+                            ),
+                            None,
+                        )
                         if instance_value != None:
-                            prob += self.exec_start_vars[instance_name] == instance_value["executionIntervals"][0]["startTime"]
-                            prob += self.exec_end_vars[instance_name] == instance_value["executionIntervals"][0]["endTime"]
-
+                            prob += (
+                                self.exec_start_vars[instance_name]
+                                == instance_value["executionIntervals"][0]["startTime"]
+                            )
+                            prob += (
+                                self.exec_end_vars[instance_name]
+                                == instance_value["executionIntervals"][0]["endTime"]
+                            )
 
         # 3a. Execution intervals for the task instances on the same core should not overlap. (From C151 - C790)
         for core1 in self.cores:
@@ -301,14 +326,17 @@ class MultiCoreScheduler:
                                 + N * psi_tasks_vars[task_pair]
                             )
 
-
-
         # 5. If a task instance uses a core, the core is marked used
         for core in self.cores:
-            prob += core_used_vars[core["name"]] <= lpSum(self.assigned_vars[(task["name"], core["name"])] for task in self.tasks_instances)
+            prob += core_used_vars[core["name"]] <= lpSum(
+                self.assigned_vars[(task["name"], core["name"])]
+                for task in self.tasks_instances
+            )
             for task in self.tasks_instances:
-                prob += core_used_vars[(core["name"])] >= self.assigned_vars[(task["name"], core["name"])]
-        
+                prob += (
+                    core_used_vars[(core["name"])]
+                    >= self.assigned_vars[(task["name"], core["name"])]
+                )
 
         if method == "e2e":
             # 6a. Transmission latencies between two tasks
@@ -318,7 +346,12 @@ class MultiCoreScheduler:
                         task_pair = (task1["name"], task2["name"])
                         prob += lambda_vars[task_pair] == lpSum(
                             psi_task_core_vars[
-                                (task1["name"], core1["name"], task2["name"], core2["name"])
+                                (
+                                    task1["name"],
+                                    core1["name"],
+                                    task2["name"],
+                                    core2["name"],
+                                )
                             ]
                             * self.get_delay(core1, core2, N)
                             for core1 in self.cores
@@ -329,7 +362,8 @@ class MultiCoreScheduler:
             for task2 in self.tasks_instances:
                 for depends_on in self.get_task_data(task2["name"])["dependsOn"]:
                     for instance2 in filter(
-                        lambda x: x["instance"] != -1, task2["value"],
+                        lambda x: x["instance"] != -1,
+                        task2["value"],
                     ):
                         for instance1 in self.get_instances(depends_on):
                             dep_pair = (depends_on, task2["name"])
@@ -360,7 +394,7 @@ class MultiCoreScheduler:
                             )
                             == 1
                         )
-            
+
             # 6c. Delay constraints
             for task1 in self.tasks_instances:
                 for task2 in self.tasks_instances:
@@ -379,20 +413,20 @@ class MultiCoreScheduler:
                                     delay_vars[dep_instances_pair]
                                     >= instance2["letStartTime"]
                                     - instance1["letEndTime"]
-                                    - 2*N
-                                    + 2*N * bool_dep_vars[dep_instances_pair]
+                                    - 2 * N
+                                    + 2 * N * bool_dep_vars[dep_instances_pair]
                                 )
                                 prob += (
                                     delay_vars[dep_instances_pair]
                                     <= instance2["letStartTime"]
                                     - instance1["letEndTime"]
-                                    + 2*N
-                                    - 2*N * bool_dep_vars[dep_instances_pair]
+                                    + 2 * N
+                                    - 2 * N * bool_dep_vars[dep_instances_pair]
                                 )
 
             # Set the total delay
             prob += total_delay_var == lpSum(delay_vars)
-        
+
         # Set the number of used cores (total)
         prob += cores_used_var == lpSum(core_used_vars)
 
@@ -400,12 +434,12 @@ class MultiCoreScheduler:
             prob += cores_used_var, "Minimise Core Usage"
         elif method == "e2e":
             prob += total_delay_var, "Minimise End-to-End Response Time"
-        
-        prob.solve(GUROBI(timeLimit=5*60))
 
-        self.update_schedule()
+        # prob.solve(GUROBI(timeLimit=5 * 60))
 
-        return self.tasks_instances, prob
+        # self.update_schedule()
+
+        # return self.tasks_instances, prob
 
     def format_tasks(self, tasks, dependencies):
         formatted_tasks = []
@@ -452,7 +486,9 @@ class MultiCoreScheduler:
                                 "startTime": start_time,
                             }
                         ]
-                        instance["executionTime"] = self.get_task_data(task["name"])["wcet"]
+                        instance["executionTime"] = self.get_task_data(task["name"])[
+                            "wcet"
+                        ]
                         instance["currentCore"] = core
                         instance["executionIntervals"] = execution_time
 
@@ -505,9 +541,7 @@ class MultiCoreScheduler:
         }
 
     def get_task_data(self, task_name):
-        return next(
-            (task for task in self.task_data if task["name"] == task_name)
-        )
+        return next((task for task in self.task_data if task["name"] == task_name))
 
     def get_device_for_core(self, core):
         return next((c["device"] for c in self.cores if c["name"] == core), None)
@@ -518,7 +552,7 @@ class MultiCoreScheduler:
                 for delay in device["delays"]:
                     if delay["protocol"] == protocol:
                         return delay
-        
+
         return None
 
     def get_delay(self, source, dest, N):
@@ -541,7 +575,7 @@ class MultiCoreScheduler:
         for task in self.tasks_instances:
             if task["name"] == task_name:
                 return task["value"]
-        
+
         return []
 
     def get_source_tasks(self, task, dependencies):
@@ -557,7 +591,6 @@ class MultiCoreScheduler:
                     source_tasks.append(dependency["source"]["task"])
 
         return source_tasks
-    
 
     @staticmethod
     def calculate_hyperperiod(task_set):
@@ -573,7 +606,10 @@ class MultiCoreScheduler:
     def calculate_makespan(task_set):
         hyperperiod = MultiCoreScheduler.calculate_hyperperiod(task_set)
         hyperoffset = MultiCoreScheduler.calculate_hyperoffset(task_set)
-        return hyperperiod * math.ceil((2 * hyperperiod + 2000000) / hyperperiod) + hyperoffset 
+        return (
+            hyperperiod * math.ceil((2 * hyperperiod + 2000000) / hyperperiod)
+            + hyperoffset
+        )
 
     @staticmethod
     def calculate_largeN(task_set):

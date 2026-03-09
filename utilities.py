@@ -32,9 +32,10 @@ class Utilities:
 
         return utilisation
 
-    def prepare_system(self, sys_config, task_set, dependencies):
+    def prepare_system(self, sys_config, task_set, dependencies, event_chains):
         sys_config["EntityStore"] = task_set
         sys_config["DependencyStore"] = dependencies
+        sys_config["EventChainStore"] = event_chains
 
         return sys_config
 

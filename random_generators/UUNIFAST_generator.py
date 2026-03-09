@@ -38,11 +38,6 @@ class UUNIFASTGenerator:
         max_period: maximal period
         utilization: desired utilization
         """
-        # # Create periods.
-        # taskset_periods = self.generate_periods_loguniform(
-        #     num_tasks, min_period, max_period
-        # )
-        # print(taskset_periods)
         # Create utilizations.
         taskset_utilizations = self.generate_utilizations_uniform(
             num_tasks, utilization
@@ -63,26 +58,6 @@ class UUNIFASTGenerator:
             )
 
         return taskset
-
-    def generate_periods_loguniform(self, num_tasks, min_period, max_period):
-        """Generate log-uniformly distributed periods to create tasks.
-
-        Variables:
-        num_tasks: number of tasks per set
-        min_period: minimal period
-        max_period: maximal period
-        rounded: flag to round periods to integers
-        """
-        # Create random periods.
-        periods = np.exp(
-            np.random.uniform(
-                low=np.log(min_period),
-                high=np.log(max_period),
-                size=(num_tasks),
-            )
-        )
-        # Make list out of them
-        return [int(round(p)) for p in periods]
 
     def generate_utilizations_uniform(self, num_tasks, utilization):
         """Generate utilizations with UUNIFAST.
